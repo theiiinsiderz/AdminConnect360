@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { SyntheticEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import BrandLogo from '../../components/BrandLogo'
+import api from '../../services/api'
 
 export default function Login() {
 	const navigate = useNavigate()
@@ -22,10 +23,8 @@ export default function Login() {
 			return
 		}
 
-		setSubmitting(true)
 		setOtpSent(true)
-		setMessage('OTP sent (dummy mode). Enter any OTP to continue.')
-		setSubmitting(false)
+		setMessage('Dummy OTP mode is active. Enter any 6 digits to continue.')
 	}
 
 	const handleSendOtpSubmit = (event: SyntheticEvent<HTMLFormElement>) => {
@@ -47,20 +46,38 @@ export default function Login() {
 		}
 
 		setSubmitting(true)
-		setMessage('Login successful. Redirecting...')
+		setMessage('')
 
-		const dummyUser = {
-			id: 'dummy-admin',
-			phoneNumber: phoneDigits,
-			role: 'admin'
+		try {
+			const response = await api.post('/auth/admin-login', {
+				phoneNumber: phoneDigits,
+				otp: otpDigits
+			})
+
+			const token = response?.data?.token
+			const user = response?.data?.user
+
+			if (!token || !user) {
+				setMessage('Invalid login response from server.')
+				return
+			}
+
+			if (user.role !== 'ADMIN') {
+				setMessage('Admin access required for this portal.')
+				return
+			}
+
+			localStorage.setItem('token', token)
+			localStorage.setItem('user', JSON.stringify(user))
+			localStorage.setItem('role', user.role)
+
+			setMessage('Login successful. Redirecting...')
+			navigate('/overview', { replace: true })
+		} catch (error: any) {
+			setMessage(error?.response?.data?.message || 'Login failed. Admin number not found.')
+		} finally {
+			setSubmitting(false)
 		}
-
-		localStorage.setItem('token', 'dummy-token')
-		localStorage.setItem('user', JSON.stringify(dummyUser))
-		localStorage.setItem('role', 'admin')
-
-		navigate('/overview', { replace: true })
-		setSubmitting(false)
 	}
 
 	return (

@@ -7,6 +7,7 @@ import Home from '../pages/Main/Home'
 import Overview from '../pages/Main/Overview'
 import People from '../pages/Main/People'
 import Vendors from '../pages/Main/Vendors'
+import AdminAdd from '../pages/AdminAddition/AdminAdd'
 
 export default function AppRoutes() {
   return (
@@ -21,6 +22,7 @@ export default function AppRoutes() {
         <Route path="/car-users" element={<CarUsers />} />
         <Route path="/people" element={<People />} />
         <Route path="/vendors" element={<Vendors />} />
+        <Route path="/add-admin" element={<AdminAdd />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

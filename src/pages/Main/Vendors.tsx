@@ -1,4 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import type { FormEvent } from 'react'
+import api from '../../services/api'
 
 interface Vendor {
     id: string
@@ -9,39 +11,44 @@ interface Vendor {
     createdAt: string
 }
 
-const MOCK_VENDORS: Vendor[] = [
-    {
-        id: '1',
-        name: 'TechCorp Solutions',
-        contactEmail: 'contact@techcorp.com',
-        logoUrl: 'https://placehold.co/100x100?text=TC',
-        createdAt: new Date().toISOString(),
-    },
-    {
-        id: '2',
-        name: 'Green Energy Ltd',
-        contactEmail: 'info@greenenergy.com',
-        logoUrl: 'https://placehold.co/100x100?text=GE',
-        createdAt: new Date().toISOString(),
-    },
-]
-
 export default function Vendors() {
-    const [vendors, setVendors] = useState<Vendor[]>(MOCK_VENDORS)
+    const [vendors, setVendors] = useState<Vendor[]>([])
+    const [isLoading, setIsLoading] = useState(true)
+    const [error, setError] = useState<string | null>(null)
     const [isModalOpen, setIsModalOpen] = useState(false)
     const [editingVendor, setEditingVendor] = useState<Vendor | null>(null)
+    const [isSaving, setIsSaving] = useState(false)
 
-    // Form State
     const [formData, setFormData] = useState({
         name: '',
         contactEmail: '',
-        logoUrl: '',
-        qrDesignUrl: '',
     })
+    const [logoFile, setLogoFile] = useState<File | null>(null)
+    const [qrDesignFile, setQrDesignFile] = useState<File | null>(null)
+
+    const fetchVendors = async () => {
+        setIsLoading(true)
+        setError(null)
+        try {
+            const response = await api.get('/admin/vendors')
+            setVendors(response.data?.vendors || [])
+        } catch (err: any) {
+            setError(err?.response?.data?.message || 'Failed to load vendors')
+        } finally {
+            setIsLoading(false)
+        }
+    }
+
+    useEffect(() => {
+        fetchVendors()
+    }, [])
 
     const handleOpenAddModal = () => {
         setEditingVendor(null)
-        setFormData({ name: '', contactEmail: '', logoUrl: '', qrDesignUrl: '' })
+        setFormData({ name: '', contactEmail: '' })
+        setLogoFile(null)
+        setQrDesignFile(null)
+        setError(null)
         setIsModalOpen(true)
     }
 
@@ -50,33 +57,58 @@ export default function Vendors() {
         setFormData({
             name: vendor.name,
             contactEmail: vendor.contactEmail || '',
-            logoUrl: vendor.logoUrl || '',
-            qrDesignUrl: vendor.qrDesignUrl || '',
         })
+        setLogoFile(null)
+        setQrDesignFile(null)
+        setError(null)
         setIsModalOpen(true)
     }
 
-    const handleDelete = (id: string) => {
+    const handleDelete = async (id: string) => {
         if (confirm('Are you sure you want to delete this vendor?')) {
-            setVendors((prev) => prev.filter((v) => v.id !== id))
+            try {
+                await api.delete(`/admin/vendors/${id}`)
+                setVendors((prev) => prev.filter((v) => v.id !== id))
+            } catch (err: any) {
+                setError(err?.response?.data?.message || 'Failed to delete vendor')
+            }
         }
     }
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: FormEvent) => {
         e.preventDefault()
-        if (editingVendor) {
-            setVendors((prev) =>
-                prev.map((v) => (v.id === editingVendor.id ? { ...v, ...formData } : v))
-            )
-        } else {
-            const newVendor: Vendor = {
-                id: Math.random().toString(36).substr(2, 9),
-                ...formData,
-                createdAt: new Date().toISOString(),
+        setIsSaving(true)
+        setError(null)
+
+        try {
+            const payload = new FormData()
+            payload.append('name', formData.name)
+            payload.append('contactEmail', formData.contactEmail)
+
+            if (logoFile) {
+                payload.append('logo', logoFile)
             }
-            setVendors((prev) => [...prev, newVendor])
+            if (qrDesignFile) {
+                payload.append('qrDesign', qrDesignFile)
+            }
+
+            if (editingVendor) {
+                await api.put(`/admin/vendors/${editingVendor.id}`, payload, {
+                    headers: { 'Content-Type': 'multipart/form-data' },
+                })
+            } else {
+                await api.post('/admin/vendors', payload, {
+                    headers: { 'Content-Type': 'multipart/form-data' },
+                })
+            }
+
+            await fetchVendors()
+            setIsModalOpen(false)
+        } catch (err: any) {
+            setError(err?.response?.data?.message || 'Failed to save vendor')
+        } finally {
+            setIsSaving(false)
         }
-        setIsModalOpen(false)
     }
 
     return (
@@ -98,7 +130,12 @@ export default function Vendors() {
                 </div>
             </article>
 
-            {/* Table View */}
+            {error && (
+                <p className="rounded-lg border border-red-500/20 bg-red-500/5 px-4 py-3 text-sm text-red-300">
+                    {error}
+                </p>
+            )}
+
             <article className="premium-card overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full text-left text-sm border-collapse">
@@ -111,8 +148,8 @@ export default function Vendors() {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-amber-100/5">
-                            {vendors.map((vendor) => (
-                                <tr key={vendor.id} className="group hover:bg-white/[0.02] transition-colors">
+                            {!isLoading && vendors.map((vendor) => (
+                                <tr key={vendor.id} className="group hover:bg-white/2 transition-colors">
                                     <td className="px-6 py-4">
                                         <div className="flex items-center gap-3">
                                             <div className="h-10 w-10 overflow-hidden rounded-lg border border-amber-100/20 bg-black/40">
@@ -151,7 +188,14 @@ export default function Vendors() {
                                     </td>
                                 </tr>
                             ))}
-                            {vendors.length === 0 && (
+                            {isLoading && (
+                                <tr>
+                                    <td colSpan={4} className="px-6 py-12 text-center text-zinc-500 italic">
+                                        Loading vendors...
+                                    </td>
+                                </tr>
+                            )}
+                            {!isLoading && vendors.length === 0 && (
                                 <tr>
                                     <td colSpan={4} className="px-6 py-12 text-center text-zinc-500 italic">
                                         No vendors found. Add one to get started.
@@ -205,24 +249,28 @@ export default function Vendors() {
 
                             <div className="grid gap-4 sm:grid-cols-2">
                                 <div className="space-y-2">
-                                    <label className="text-xs font-medium uppercase tracking-wider text-amber-100/60">Logo URL</label>
+                                    <label className="text-xs font-medium uppercase tracking-wider text-amber-100/60">Logo Image (PNG/JPG)</label>
                                     <input
-                                        type="url"
-                                        value={formData.logoUrl}
-                                        onChange={(e) => setFormData({ ...formData, logoUrl: e.target.value })}
-                                        className="w-full rounded-xl border border-amber-100/10 bg-black/40 px-4 py-3 text-amber-50 placeholder:text-zinc-600 focus:border-amber-400/50 focus:outline-none transition-colors"
-                                        placeholder="https://..."
+                                        type="file"
+                                        accept="image/png,image/jpeg"
+                                        onChange={(e) => setLogoFile(e.target.files?.[0] || null)}
+                                        className="w-full rounded-xl border border-amber-100/10 bg-black/40 px-4 py-3 text-amber-50 file:mr-3 file:rounded-md file:border-0 file:bg-amber-300 file:px-3 file:py-1 file:text-xs file:font-semibold file:text-black"
                                     />
+                                    {!logoFile && editingVendor?.logoUrl && (
+                                        <img src={editingVendor.logoUrl} alt="Current vendor logo" className="h-12 w-12 rounded-md border border-amber-100/20 object-cover" />
+                                    )}
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-xs font-medium uppercase tracking-wider text-amber-100/60">QR Design URL</label>
+                                    <label className="text-xs font-medium uppercase tracking-wider text-amber-100/60">QR Design Image (PNG/JPG)</label>
                                     <input
-                                        type="url"
-                                        value={formData.qrDesignUrl}
-                                        onChange={(e) => setFormData({ ...formData, qrDesignUrl: e.target.value })}
-                                        className="w-full rounded-xl border border-amber-100/10 bg-black/40 px-4 py-3 text-amber-50 placeholder:text-zinc-600 focus:border-amber-400/50 focus:outline-none transition-colors"
-                                        placeholder="https://..."
+                                        type="file"
+                                        accept="image/png,image/jpeg"
+                                        onChange={(e) => setQrDesignFile(e.target.files?.[0] || null)}
+                                        className="w-full rounded-xl border border-amber-100/10 bg-black/40 px-4 py-3 text-amber-50 file:mr-3 file:rounded-md file:border-0 file:bg-amber-300 file:px-3 file:py-1 file:text-xs file:font-semibold file:text-black"
                                     />
+                                    {!qrDesignFile && editingVendor?.qrDesignUrl && (
+                                        <img src={editingVendor.qrDesignUrl} alt="Current QR design" className="h-12 w-12 rounded-md border border-amber-100/20 object-cover" />
+                                    )}
                                 </div>
                             </div>
 
@@ -236,9 +284,10 @@ export default function Vendors() {
                                 </button>
                                 <button
                                     type="submit"
+                                    disabled={isSaving}
                                     className="flex-1 rounded-xl bg-linear-to-r from-amber-300 to-yellow-500 py-3 text-sm font-bold uppercase tracking-widest text-black shadow-lg hover:brightness-110 active:scale-[0.98] transition-all"
                                 >
-                                    {editingVendor ? 'Update Vendor' : 'Create Vendor'}
+                                    {isSaving ? 'Saving...' : editingVendor ? 'Update Vendor' : 'Create Vendor'}
                                 </button>
                             </div>
                         </form>
