@@ -6,6 +6,7 @@ import Generate from '../pages/Main/Generate'
 import Home from '../pages/Main/Home'
 import Overview from '../pages/Main/Overview'
 import People from '../pages/Main/People'
+import Vendors from '../pages/Main/Vendors'
 
 export default function AppRoutes() {
   return (
@@ -19,6 +20,7 @@ export default function AppRoutes() {
         <Route path="/bike-users" element={<BikeUsers />} />
         <Route path="/car-users" element={<CarUsers />} />
         <Route path="/people" element={<People />} />
+        <Route path="/vendors" element={<Vendors />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

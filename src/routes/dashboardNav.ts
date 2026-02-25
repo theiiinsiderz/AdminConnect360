@@ -4,6 +4,7 @@ export const dashboardNavItems = [
   { key: 'bike-users', label: 'Bike Users', path: '/bike-users' },
   { key: 'car-users', label: 'Car Users', path: '/car-users' },
   { key: 'people', label: 'People', path: '/people' },
+  { key: 'vendors', label: 'Vendors', path: '/vendors' },
 ] as const
 
 export type DashboardNavKey = (typeof dashboardNavItems)[number]['key']
