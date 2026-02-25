@@ -1,9 +1,17 @@
 export const dashboardNavItems = [
   { key: 'overview', label: 'Overview', path: '/overview' },
   { key: 'generate', label: 'Generate', path: '/generate' },
-  { key: 'bike-users', label: 'Bike Users', path: '/bike-users' },
-  { key: 'car-users', label: 'Car Users', path: '/car-users' },
-  { key: 'people', label: 'People', path: '/people' },
+  {
+    key: 'tags',
+    label: 'Tags',
+    path: '/tags',
+    children: [
+      { key: 'car-tags', label: 'Car Tags', path: '/tags/car' },
+      { key: 'bike-tags', label: 'Bike Tags', path: '/tags/bike' },
+      { key: 'pet-tags', label: 'Pet Tags', path: '/tags/pet' },
+      { key: 'kid-tags', label: 'Kid Tags', path: '/tags/kid' },
+    ],
+  },
   { key: 'vendors', label: 'Vendors', path: '/vendors' },
   { key: 'add-admin', label: 'Add Admin', path: '/add-admin' },
 ] as const
