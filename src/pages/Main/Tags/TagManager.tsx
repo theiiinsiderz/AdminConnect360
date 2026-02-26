@@ -1,5 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import api from '../../../services/api'
+
+interface Vendor {
+    id: string
+    name: string
+}
 
 interface Tag {
     id: string
@@ -8,6 +13,7 @@ interface Tag {
     status: string
     domainType: string
     companyId: string
+    company?: Vendor
     [key: string]: any // For profile specific fields
 }
 
@@ -15,32 +21,82 @@ interface TagManagerProps {
     type: 'CAR' | 'BIKE' | 'PET' | 'KID'
 }
 
+interface PaginationMeta {
+    total: number
+    page: number
+    limit: number
+    totalPages: number
+}
+
 export default function TagManager({ type }: TagManagerProps) {
     const [tags, setTags] = useState<Tag[]>([])
     const [isLoading, setIsLoading] = useState(true)
     const [isModalOpen, setIsModalOpen] = useState(false)
     const [editingTag, setEditingTag] = useState<Tag | null>(null)
+    const [vendors, setVendors] = useState<Vendor[]>([])
+
+    // Filter & Search State
+    const [searchTerm, setSearchTerm] = useState('')
+    const [statusFilter, setStatusFilter] = useState('')
+    const [vendorFilter, setVendorFilter] = useState('')
+
+    // Pagination State
+    const [currentPage, setCurrentPage] = useState(1)
+    const [paginationMeta, setPaginationMeta] = useState<PaginationMeta | null>(null)
 
     // Dynamic form state based on type
     const [formData, setFormData] = useState<any>({})
 
-    const fetchTags = async () => {
-        setIsLoading(true)
+    const fetchVendors = async () => {
         try {
-            const response = await api.get(`/tags/type/${type}`)
-            setTags(response.data)
+            const response = await api.get('/admin/vendors')
+            setVendors(response.data?.vendors || [])
         } catch (err) {
-            console.error('Failed to fetch tags:', err)
-            // Fallback to empty list or mock if needed
-            setTags([])
-        } finally {
-            setIsLoading(false)
+            console.error('Failed to fetch vendors:', err)
         }
     }
 
+    const fetchTags = useCallback(async () => {
+        setIsLoading(true)
+        try {
+            const params = {
+                vendorId: vendorFilter || undefined,
+                status: statusFilter || undefined,
+                search: searchTerm || undefined,
+                page: currentPage,
+                limit: 10
+            }
+            const response = await api.get(`/admin/tags/type/${type}`, { params })
+
+            // Handle pagination metadata (support both 'pagination' and 'meta' keys)
+            if (response.data.tags) {
+                setTags(response.data.tags)
+                setPaginationMeta(response.data.pagination || response.data.meta)
+            } else {
+                setTags(response.data)
+                setPaginationMeta(null)
+            }
+        } catch (err) {
+            console.error('Failed to fetch tags:', err)
+            setTags([])
+            setPaginationMeta(null)
+        } finally {
+            setIsLoading(false)
+        }
+    }, [type, vendorFilter, statusFilter, searchTerm, currentPage])
+
+    useEffect(() => {
+        fetchVendors()
+    }, [])
+
     useEffect(() => {
         fetchTags()
-    }, [type])
+    }, [fetchTags])
+
+    // Reset page when filters change
+    useEffect(() => {
+        setCurrentPage(1)
+    }, [searchTerm, statusFilter, vendorFilter])
 
     const handleOpenEditModal = (tag: Tag) => {
         setEditingTag(tag)
@@ -56,8 +112,8 @@ export default function TagManager({ type }: TagManagerProps) {
     const handleDelete = async (id: string) => {
         if (confirm('Are you sure you want to delete this tag?')) {
             try {
-                await api.delete(`/tags/${id}`)
-                setTags((prev) => prev.filter((t) => t.id !== id))
+                await api.delete(`/admin/tags/${id}`)
+                fetchTags()
             } catch (err) {
                 alert('Failed to delete tag')
                 console.error(err)
@@ -70,7 +126,7 @@ export default function TagManager({ type }: TagManagerProps) {
         if (!editingTag) return
 
         try {
-            await api.patch(`/tags/${editingTag.id}`, formData)
+            await api.patch(`/admin/tags/${editingTag.id}`, formData)
             setIsModalOpen(false)
             fetchTags()
         } catch (err) {
@@ -110,11 +166,52 @@ export default function TagManager({ type }: TagManagerProps) {
         <section className="space-y-6">
             {/* Header Card */}
             <article className="premium-card p-6 md:p-7">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
                     <div>
                         <p className="text-xs uppercase tracking-[0.24em] text-amber-200/70">Management</p>
                         <h3 className="mt-2 text-2xl font-semibold tracking-tight text-amber-50">{type} TAGS</h3>
-                        <p className="mt-2 text-sm text-zinc-300">Manage {type.toLowerCase()} specific QR tags and profiles.</p>
+                        <p className="mt-1 text-sm text-zinc-400">Manage products, search by owner, and filter by status or vendor.</p>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:flex gap-3">
+                        {/* Search Bar */}
+                        <div className="relative group min-w-[200px]">
+                            <input
+                                type="text"
+                                placeholder="Search owner name..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="w-full rounded-xl border border-amber-100/10 bg-black/40 px-4 py-2.5 pl-10 text-sm text-amber-50 placeholder:text-zinc-600 focus:border-amber-400/50 focus:outline-none transition-all"
+                            />
+                            <svg className="absolute left-3.5 top-3 h-4 w-4 text-zinc-500 group-focus-within:text-amber-400/70 transition-colors" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                            </svg>
+                        </div>
+
+                        {/* Status Filter */}
+                        <select
+                            value={statusFilter}
+                            onChange={(e) => setStatusFilter(e.target.value)}
+                            className="rounded-xl border border-amber-100/10 bg-black/40 px-4 py-2.5 text-sm text-amber-50 focus:border-amber-400/50 focus:outline-none transition-all appearance-none pr-10 relative bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20width%3D%2220%22%20height%3D%2220%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22none%22%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%3E%3Cpath%20d%3D%22M5%207L10%2012L15%207%22%20stroke%3D%22%2371717a%22%20stroke-width%3D%221.5%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22/%3E%3C/svg%3E')] bg-[length:20px] bg-[right_10px_center] bg-no-repeat"
+                        >
+                            <option value="">All Statuses</option>
+                            <option value="MINTED">Minted</option>
+                            <option value="ACTIVE">Active</option>
+                            <option value="SUSPENDED">Suspended</option>
+                            <option value="REVOKED">Revoked</option>
+                        </select>
+
+                        {/* Vendor Filter */}
+                        <select
+                            value={vendorFilter}
+                            onChange={(e) => setVendorFilter(e.target.value)}
+                            className="rounded-xl border border-amber-100/10 bg-black/40 px-4 py-2.5 text-sm text-amber-50 focus:border-amber-400/50 focus:outline-none transition-all appearance-none pr-10 relative bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20width%3D%2220%22%20height%3D%2220%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22none%22%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%3E%3Cpath%20d%3D%22M5%207L10%2012L15%207%22%20stroke%3D%22%2371717a%22%20stroke-width%3D%221.5%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22/%3E%3C/svg%3E')] bg-[length:20px] bg-[right_10px_center] bg-no-repeat"
+                        >
+                            <option value="">All Vendors</option>
+                            {vendors.map(v => (
+                                <option key={v.id} value={v.id}>{v.name}</option>
+                            ))}
+                        </select>
                     </div>
                 </div>
             </article>
@@ -126,6 +223,7 @@ export default function TagManager({ type }: TagManagerProps) {
                         <thead>
                             <tr className="border-b border-amber-100/10 bg-black/20 text-xs uppercase tracking-wider text-amber-100/60">
                                 <th className="px-6 py-4 font-medium">Tag Code</th>
+                                <th className="px-6 py-4 font-medium">Company</th>
                                 <th className="px-6 py-4 font-medium">Nickname</th>
                                 <th className="px-6 py-4 font-medium">Status</th>
                                 <th className="px-6 py-4 font-medium">Profile Info</th>
@@ -135,7 +233,7 @@ export default function TagManager({ type }: TagManagerProps) {
                         <tbody className="divide-y divide-amber-100/5">
                             {isLoading ? (
                                 <tr>
-                                    <td colSpan={5} className="px-6 py-12 text-center text-amber-100/30 animate-pulse">
+                                    <td colSpan={6} className="px-6 py-12 text-center text-amber-100/30 animate-pulse">
                                         Loading tags...
                                     </td>
                                 </tr>
@@ -143,6 +241,9 @@ export default function TagManager({ type }: TagManagerProps) {
                                 <tr key={tag.id} className="group hover:bg-white/[0.02] transition-colors">
                                     <td className="px-6 py-4">
                                         <span className="font-mono text-amber-200/90">{tag.code}</span>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <span className="text-zinc-300">{tag.company?.name || '-'}</span>
                                     </td>
                                     <td className="px-6 py-4 text-zinc-300">{tag.nickname || '-'}</td>
                                     <td className="px-6 py-4">
@@ -175,14 +276,43 @@ export default function TagManager({ type }: TagManagerProps) {
                             ))}
                             {!isLoading && tags.length === 0 && (
                                 <tr>
-                                    <td colSpan={5} className="px-6 py-12 text-center text-zinc-500 italic">
-                                        No {type.toLowerCase()} tags found.
+                                    <td colSpan={6} className="px-6 py-12 text-center text-zinc-500 italic">
+                                        No {type.toLowerCase()} tags found matching filters.
                                     </td>
                                 </tr>
                             )}
                         </tbody>
                     </table>
                 </div>
+
+                {/* Pagination Stats & Controls */}
+                {paginationMeta && (
+                    <div className="flex items-center justify-between border-t border-amber-100/10 bg-black/20 px-6 py-4">
+                        <p className="text-xs text-zinc-500">
+                            Showing page <span className="text-amber-100/80 font-medium">{paginationMeta.page}</span> of <span className="text-amber-100/80 font-medium">{paginationMeta.totalPages || 1}</span>
+                            <span className="mx-2 opacity-30">|</span>
+                            Total <span className="text-amber-100/80 font-medium">{paginationMeta.total}</span> items
+                        </p>
+                        <div className="flex gap-2">
+                            <button
+                                type="button"
+                                disabled={currentPage === 1}
+                                onClick={() => setCurrentPage(prev => prev - 1)}
+                                className="rounded-lg border border-amber-100/10 bg-black/40 px-3 py-1.5 text-xs font-medium text-amber-100/70 hover:bg-amber-100/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                            >
+                                Previous
+                            </button>
+                            <button
+                                type="button"
+                                disabled={!paginationMeta.totalPages || currentPage >= paginationMeta.totalPages}
+                                onClick={() => setCurrentPage(prev => prev + 1)}
+                                className="rounded-lg border border-amber-100/10 bg-black/40 px-3 py-1.5 text-xs font-medium text-amber-100/70 hover:bg-amber-100/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                            >
+                                Next
+                            </button>
+                        </div>
+                    </div>
+                )}
             </article>
 
             {/* Modal */}
@@ -206,6 +336,20 @@ export default function TagManager({ type }: TagManagerProps) {
                                     className="w-full rounded-xl border border-amber-100/10 bg-black/40 px-4 py-3 text-amber-50 placeholder:text-zinc-600 focus:border-amber-400/50 focus:outline-none"
                                     placeholder="e.g. My daily ride"
                                 />
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-xs font-medium uppercase tracking-wider text-amber-100/60">Status</label>
+                                <select
+                                    value={formData.status}
+                                    onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                                    className="w-full rounded-xl border border-amber-100/10 bg-black/40 px-4 py-3 text-amber-50 focus:border-amber-400/50 focus:outline-none appearance-none bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20width%3D%2220%22%20height%3D%2220%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22none%22%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%3E%3Cpath%20d%3D%22M5%207L10%2012L15%207%22%20stroke%3D%22%2371717a%22%20stroke-width%3D%221.5%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22/%3E%3C/svg%3E')] bg-[length:20px] bg-[right_15px_center] bg-no-repeat"
+                                >
+                                    <option value="MINTED">Minted</option>
+                                    <option value="ACTIVE">Active</option>
+                                    <option value="SUSPENDED">Suspended</option>
+                                    <option value="REVOKED">Revoked</option>
+                                </select>
                             </div>
 
                             {getProfileFields().map((field) => (
