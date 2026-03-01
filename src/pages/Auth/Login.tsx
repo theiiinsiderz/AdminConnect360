@@ -94,7 +94,7 @@ export default function Login() {
 						<div className="flex justify-center">
 							<BrandLogo className="[&>svg]:h-16" />
 						</div>
-						<p className="text-xs font-semibold tracking-[0.35em] text-amber-200/80">CARCARD ADMIN</p>
+						<p className="text-xs font-semibold tracking-[0.35em] text-amber-200/80">CONNECT360 ADMIN</p>
 						<p className="text-sm text-amber-100/70">Sign in securely with your phone number and one-time passcode.</p>
 					</div>
 
@@ -118,21 +118,23 @@ export default function Login() {
 							</div>
 						</label>
 
-						<label className="block space-y-2">
-							<span className="text-xs font-medium uppercase tracking-[0.22em] text-amber-100/80">One-Time Password</span>
-							<input
-								type="text"
-								inputMode="numeric"
-								autoComplete="one-time-code"
-								placeholder="Enter 6-digit OTP"
-								value={otpDigits}
-								onChange={(event) => {
-									setOtp(event.target.value.replace(/\D/g, '').slice(0, 6))
-									setMessage('')
-								}}
-								className="w-full rounded-xl border border-amber-100/20 bg-black/40 px-4 py-3 text-base tracking-[0.3em] text-amber-50 placeholder:text-amber-50/35 focus:border-amber-300/60 focus:outline-none"
-							/>
-						</label>
+						{otpSent && (
+							<label className="block space-y-2">
+								<span className="text-xs font-medium uppercase tracking-[0.22em] text-amber-100/80">One-Time Password</span>
+								<input
+									type="text"
+									inputMode="numeric"
+									autoComplete="one-time-code"
+									placeholder="Enter 6-digit OTP"
+									value={otpDigits}
+									onChange={(event) => {
+										setOtp(event.target.value.replace(/\D/g, '').slice(0, 6))
+										setMessage('')
+									}}
+									className="w-full rounded-xl border border-amber-100/20 bg-black/40 px-4 py-3 text-base tracking-[0.3em] text-amber-50 placeholder:text-amber-50/35 focus:border-amber-300/60 focus:outline-none"
+								/>
+							</label>
+						)}
 
 						<button
 							type="submit"

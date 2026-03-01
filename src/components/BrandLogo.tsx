@@ -28,7 +28,7 @@ export default function BrandLogo({ className = '', showText = false }: BrandLog
 
       {showText && (
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-[0.33em] text-amber-200/80">Carcard</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.33em] text-amber-200/80">Connect360</p>
           <p className="mt-1 text-base font-semibold tracking-tight text-amber-50">Admin Portal</p>
         </div>
       )}
